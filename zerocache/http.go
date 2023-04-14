@@ -43,7 +43,6 @@ func (p *HTTPPool) Log(format string, v ...interface{}) {
 }
 
 func (p *HTTPPool) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	fmt.Println("p basePath,", p.basePath)
 	if !strings.HasPrefix(req.URL.Path, p.basePath) {
 		panic("HTTPPool serving unexpected path: " + req.URL.Path)
 	}

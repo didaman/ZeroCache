@@ -39,7 +39,6 @@ func startAPIServer(apiAddr string, zero *zerocache.Group) {
 	http.Handle("/api", http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			key := r.URL.Query().Get("key")
-			fmt.Println("http handler get key", key)
 			view, err := zero.Get(key)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)

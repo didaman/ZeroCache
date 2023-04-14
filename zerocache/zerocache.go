@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"zerocache/singleflight"
 )
 
 type Group struct {
@@ -11,6 +12,8 @@ type Group struct {
 	getter    Getter
 	mainCache cache
 	peers     PeerPicker
+	// 添加singleflight.Group 保证每个key请求 只从远程节点获取一次
+	loader *singleflight.Group
 }
 
 type Getter interface {
@@ -38,6 +41,7 @@ func NewGroup(name string, cacheBytes int64, getter Getter) *Group {
 		name:      name,
 		getter:    getter,
 		mainCache: cache{cacheBytes: cacheBytes},
+		loader:    &singleflight.Group{},
 	}
 	groups[name] = g
 	return g
@@ -68,17 +72,24 @@ func (g *Group) Get(key string) (ByteView, error) {
 	return g.load(key)
 }
 
-func (g *Group) load(key string) (ByteView, error) {
-	if g.peers != nil {
-		if peer, ok := g.peers.PickPeer(key); ok {
-			if value, err := g.getFromPeer(peer, key); err == nil {
-				return value, err
-			} else {
-				log.Println("[ZeroCache] Failed to get from peer", err)
+func (g *Group) load(key string) (value ByteView, err error) {
+	// 每个key只从远处或本地 请求一次
+	viewi, err := g.loader.Do(key, func() (interface{}, error) {
+		if g.peers != nil {
+			if peer, ok := g.peers.PickPeer(key); ok {
+				if value, err := g.getFromPeer(peer, key); err == nil {
+					return value, err
+				} else {
+					log.Println("[ZeroCache] Failed to get from peer", err)
+				}
 			}
 		}
+		return g.getLocally(key)
+	})
+	if err == nil {
+		return viewi.(ByteView), nil
 	}
-	return g.getLocally(key)
+	return
 }
 
 func (g *Group) getLocally(key string) (ByteView, error) {
